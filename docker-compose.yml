@@ -1,0 +1,52 @@
+services:
+  backend:
+    build: ./backend
+    container_name: jwt_backend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend:/nodeJS
+      - /nodeJS/node_modules
+    env_file:
+      - .env     
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - jwt-network
+
+  frontend:
+    build: ./frontend
+    container_name: jwt_frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    networks:
+      - jwt-network
+
+  db:
+    image: mysql:8.4
+    container_name: jwt_db
+    restart: always
+    env_file:
+      - .env  
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - jwt-network
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  jwt-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
