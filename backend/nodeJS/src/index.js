@@ -23,6 +23,18 @@ app.use("/api/logs", logsRoutes);
     await sequelize.sync({ alter: true });
     console.log("Database synchronized (SQLite)");
 
+    const { User } = sequelize.models;
+    const adminExists = await User.findOne({ where: { username: "admin" } });
+
+    if (!adminExists) {
+      const hashedPassword = await bcrypt.hash("admin", 10);
+      await User.create({
+        username: "admin",
+        passwordHash: hashedPassword,
+        role: "admin",
+      });
+    }
+
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });
