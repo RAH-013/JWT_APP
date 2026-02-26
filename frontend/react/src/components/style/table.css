@@ -1,0 +1,66 @@
+.containerTable {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    padding: 2rem;
+    gap: 1rem;
+}
+
+.headerTable {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.headerTable button {
+    border-radius: 0.3rem;
+    border: 1px solid black;
+    padding: 0.3rem;
+    color: black;
+    cursor: pointer;
+    background-color: rgb(82, 173, 82);
+}
+
+.MuiDataGrid-columnHeaderTitleContainer,
+.MuiDataGrid-columnSeparator,
+.MuiDataGrid-menuIcon,
+.MuiDataGrid-sortButton,
+.MuiDataGrid-columnHeaderDraggableContainer,
+.MuiDataGrid-columnHeader,
+.MuiDataGrid-columnHeader .MuiSvgIcon-root {
+    background-color: #30013e !important;
+    color: whitesmoke !important;
+    fill: whitesmoke !important;
+}
+
+.MuiDataGrid-columnSeparator {
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.table-actions {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+}
+
+.table-actions button {
+    border-radius: 0.3rem;
+    border: 1px solid black;
+    padding: 0.3rem;
+    color: black;
+    cursor: pointer;
+}
+
+.table-actions button:nth-child(1) {
+    background-color: rgb(228, 119, 119);
+}
+
+.table-actions button:nth-child(2) {
+    background-color: rgb(119, 137, 228);
+}

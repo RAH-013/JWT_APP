@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
-
+import { useUser } from "../context/UserContext";
 import { apiAuth } from "../../api/auth";
 
 import "../style/auth.css";
@@ -14,19 +14,18 @@ export default function Auth() {
   const [password, setPassword] = useState("");
 
   const navigate = useNavigate();
+  const { refreshUser } = useUser();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     try {
       const { token } = await apiAuth({ name, password });
-
       sessionStorage.setItem("jwt_project", token);
-      console.clear();
 
       MySwal.fire({
         toast: true,
-        position: "top-end",
+        position: "bottom",
         icon: "success",
         title: "Autenticación exitosa",
         showConfirmButton: false,
@@ -34,12 +33,13 @@ export default function Auth() {
         timerProgressBar: true,
       });
 
-      navigate("/");
+      await refreshUser();
+      navigate("/", { replace: true });
     } catch (err) {
       console.error("Error en autenticación:", err);
       MySwal.fire({
         toast: true,
-        position: "top-end",
+        position: "bottom",
         icon: "error",
         title: "Credenciales incorrectas",
         showConfirmButton: false,
@@ -53,8 +53,20 @@ export default function Auth() {
     <div className="authContainer">
       <form onSubmit={handleSubmit}>
         <h1>Ingresa tus credenciales</h1>
-        <input type="text" placeholder="Usuario" value={name} onChange={(e) => setName(e.target.value)} required />
-        <input type="password" placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        <input
+          type="text"
+          placeholder="Usuario"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+        />
+        <input
+          type="password"
+          placeholder="Contraseña"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
         <button type="submit">Iniciar Sesión</button>
       </form>
     </div>

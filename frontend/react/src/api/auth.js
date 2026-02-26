@@ -19,18 +19,26 @@ export const apiMe = async () => {
   }
 };
 
-// export const apiRegister = async ({ fullName, email, password, phoneNumber, address }) => {
-//   try {
-//     const response = await apiAxios.post("/users/register", { fullName, email, password, phoneNumber, address });
-//     return response.data;
-//   } catch (error) {
-//     console.error("Error al registrar usuario:", error);
-//   }
-// };
+export const apiGetUsers = async () => {
+  try {
+    const response = await apiAxios.get("/users/home");
+    return response.data;
+  } catch (error) {
+    console.error("Error en obtener información de usuarios:", error);
+  }
+};
+
+export const apiCreate = async ({ name, password, role }) => {
+  try {
+    const response = await apiAxios.post('/users/register/', { name, password, role });
+    return response.data;
+  } catch (error) {
+    console.error("Error al crear usuario:", error);
+  }
+}
 
 export const apiUpdate = async (id, { name, password, role }) => {
   try {
-    console.log(id);
     const response = await apiAxios.put(`/users/update/${id}`, { name, password, role });
     return response.data;
   } catch (error) {
@@ -38,14 +46,14 @@ export const apiUpdate = async (id, { name, password, role }) => {
   }
 };
 
-// export const getInfo = async () => {
-//   try {
-//     const response = await apiAxios.get("/users/my");
-//     return response.data;
-//   } catch (error) {
-//     console.error("Error al obtener información:", error);
-//   }
-// };
+export const apiDelete = async (id) => {
+  try {
+    const response = await apiAxios.delete(`/users/delete/${id}`);
+    return response.data;
+  } catch (error) {
+    console.error("Error al eliminar usuario:", error);
+  }
+}
 
 export const decodeToken = () => {
   const token = sessionStorage.getItem("jwt_project") || null;

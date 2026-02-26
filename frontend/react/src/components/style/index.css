@@ -5,3 +5,11 @@
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   user-select: none;
 }
+
+.swal2-custom-input,
+.swal2-custom-select {
+  width: 60%;
+  padding: 0.75em;
+  margin: 1em 2em 3px;
+  font-size: 1rem;
+}
