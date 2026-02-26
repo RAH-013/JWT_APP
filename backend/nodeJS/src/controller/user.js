@@ -1,142 +1,214 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { User } from "../models/users.js";
-import Log from "../models/logs.js";
+import User from "../model/user.js";
+import { Op } from "sequelize";
+import Log from "../model/logs.js";
 import { JWT_SECRET } from "../config/env.js";
 
-// ==========================
-// Autenticación (solo id en token)
-// ==========================
 export const authUser = async (req, res) => {
-    const { name, password } = req.body;
-    const ip = req.ip;
+  const { name, password } = req.body;
+  const ip = req.ip;
 
-    try {
-        const user = await User.findOne({ where: { name } });
+  try {
+    const user = await User.findOne({ where: { name } });
 
-        if (!user) {
-            await Log.create({ username: name, success: false, ip, message: "User not found" });
-            return res.status(401).json({ message: "Usuario o contraseña incorrectos" });
-        }
-
-        const validPassword = await bcrypt.compare(password, user.passwordHash);
-        if (!validPassword) {
-            await Log.create({ username: name, success: false, ip, message: "Invalid password" });
-            return res.status(401).json({ message: "Usuario o contraseña incorrectos" });
-        }
-
-        // Token solo con id
-        const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: "1h" });
-
-        await Log.create({ username: name, success: true, ip, message: "Login successful" });
-
-        res.json({
-            id: user.id,
-            name: user.name,
-            role: user.role,
-            token,
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: "Error al autenticar usuario" });
+    if (!user) {
+      await Log.create({ username: name, status: false, ip, message: "Usuario no encontrado" });
+      return res.status(401).json({ message: "Usuario o contraseña incorrectos" });
     }
+
+    const validPassword = await bcrypt.compare(password, user.passwordHash);
+    if (!validPassword) {
+      await Log.create({ username: name, status: false, ip, message: "Contraseña incorrecta" });
+      return res.status(401).json({ message: "Usuario o contraseña incorrectos" });
+    }
+
+    const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: "1h" });
+
+    await Log.create({ username: name, status: true, ip, message: "Login exitoso" });
+
+    res.json({
+      token,
+    });
+  } catch (err) {
+    console.error(err);
+    await Log.create({ username: name, status: false, ip, message: `Error autenticando usuario: ${err.message}` });
+    res.status(500).json({ message: "Error al autenticar usuario" });
+  }
 };
 
-// ==========================
-// Obtener usuarios según rol
-// user → su info, manager → todos, admin → todos
-// ==========================
+export const getUsers = async (req, res) => {
+  const ip = req.ip;
+  try {
+    const currentUser = await User.findByPk(req.userId);
+
+    if (!currentUser || (currentUser.role !== "manager" && currentUser.role !== "admin")) {
+      await Log.create({
+        userId: currentUser?.id || null,
+        username: currentUser?.name || null,
+        ip,
+        status: false,
+        message: "Intento de obtener usuarios sin permisos",
+      });
+      return res.status(403).json({ message: "No autorizado" });
+    }
+
+    const users = await User.findAll({
+      where: {
+        id: {
+          [Op.ne]: currentUser.id,
+        },
+      },
+      attributes: { exclude: ["passwordHash"] }, // <--- excluye la contraseña
+    });
+
+    await Log.create({
+      userId: currentUser.id,
+      username: currentUser.name,
+      ip,
+      status: true,
+      message: "Obtención de lista de usuarios exitosa",
+    });
+
+    res.json({ status: true, users });
+  } catch (err) {
+    console.error(err);
+    await Log.create({
+      userId: req.userId,
+      username: currentUser?.name || null,
+      ip,
+      status: false,
+      message: `Error al obtener usuarios: ${err.message}`,
+    });
+    res.status(500).json({ status: false, message: "Error al obtener usuarios" });
+  }
+};
+
 export const getUserData = async (req, res) => {
-    try {
-        const { userId } = req;
+  const ip = req.ip;
+  try {
+    const currentUser = await User.findByPk(req.userId, {
+      attributes: { exclude: ["passwordHash"] }, // <--- excluye la contraseña
+    });
 
-        const currentUser = await User.findByPk(userId);
-        if (!currentUser) return res.status(404).json({ message: "Usuario no encontrado" });
-
-        if (currentUser.role === "user") {
-            // solo su info
-            return res.json(currentUser);
-        }
-
-        // manager y admin ven todos
-        const users = await User.findAll({
-            attributes: ["id", "name", "role", "createdAt", "updatedAt"],
-        });
-        res.json(users);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: "Error al obtener usuarios" });
+    if (!currentUser) {
+      await Log.create({
+        username: null,
+        ip,
+        status: false,
+        message: "Usuario no encontrado al obtener datos",
+      });
+      return res.status(404).json({ message: "Usuario no encontrado" });
     }
+
+    await Log.create({
+      username: currentUser.name,
+      ip,
+      status: true,
+      message: "Consulta de datos de usuario",
+    });
+
+    res.json(currentUser);
+  } catch (err) {
+    console.error(err);
+    await Log.create({
+      username: null,
+      ip,
+      status: false,
+      message: `Error al obtener usuario: ${err.message}`,
+    });
+    res.status(500).json({ message: "Error al obtener usuario" });
+  }
 };
 
-// ==========================
-// Crear usuario (solo admin)
-// ==========================
 export const addUser = async (req, res) => {
-    try {
-        const currentUser = await User.findByPk(req.userId);
-        if (currentUser.role !== "admin") return res.status(403).json({ message: "No autorizado" });
-
-        const { name, password, role } = req.body;
-        const passwordHash = await bcrypt.hash(password, 10);
-
-        const newUser = await User.create({ name, passwordHash, role });
-        res.status(201).json({ id: newUser.id, name: newUser.name, role: newUser.role });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: "Error al crear usuario" });
+  const ip = req.ip;
+  try {
+    const currentUser = await User.findByPk(req.userId);
+    if (!currentUser || currentUser.role !== "admin") {
+      await Log.create({ username: currentUser?.name || null, ip, status: false, message: "Intento de crear usuario sin permisos" });
+      return res.status(403).json({ message: "No autorizado" });
     }
+
+    const { name, password, role } = req.body;
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const newUser = await User.create({ name, passwordHash, role });
+
+    await Log.create({ username: currentUser.name, ip, status: true, message: `Usuario creado: ${newUser.name}` });
+
+    res.status(201).json({ status: true });
+  } catch (err) {
+    console.error(err);
+    await Log.create({ username: null, ip, status: false, message: `Error creando usuario: ${err.message}` });
+    res.status(500).json({ status: false, message: "Error al crear usuario" });
+  }
 };
 
-// ==========================
-// Actualizar usuario (admin, manager o user sobre sí mismo)
-// ==========================
 export const updateUser = async (req, res) => {
-    try {
-        const { id } = req.params; // id del usuario a modificar
-        const { name, password, role } = req.body;
-        const currentUser = await User.findByPk(req.userId);
-        const targetUser = await User.findByPk(id);
+  const ip = req.ip;
 
-        if (!targetUser) return res.status(404).json({ message: "Usuario no encontrado" });
+  try {
+    const { id } = req.params;
+    const { name, password, role } = req.body;
+    const currentUser = await User.findByPk(req.userId);
+    const targetUser = await User.findByPk(id);
 
-        // Validación de permisos
-        if (currentUser.role !== "admin" && currentUser.id !== targetUser.id) {
-            return res.status(403).json({ message: "No autorizado" });
-        }
-
-        if (name) targetUser.name = name;
-        if (password) targetUser.passwordHash = await bcrypt.hash(password, 10);
-        if (role && currentUser.role === "admin") targetUser.role = role; // solo admin cambia roles
-
-        await targetUser.save();
-        res.json({ id: targetUser.id, name: targetUser.name, role: targetUser.role });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: "Error al actualizar usuario" });
+    if (!targetUser) {
+      await Log.create({ username: currentUser?.name || null, ip, status: false, message: `Intento de actualizar usuario no existente: ${id}` });
+      return res.status(404).json({ message: "Usuario no encontrado" });
     }
+
+    if (currentUser.role === "admin") {
+      if (name) targetUser.name = name;
+      if (password) targetUser.passwordHash = await bcrypt.hash(password, 10);
+      if (role) targetUser.role = role;
+    } else if (currentUser.role === "manager" || currentUser.role === "user") {
+      if (currentUser.id !== targetUser.id) {
+        await Log.create({ username: currentUser.name, ip, status: false, message: `Intento de actualizar otro usuario sin permisos: ${id}` });
+        return res.status(403).json({ message: "No autorizado" });
+      }
+      if (name) targetUser.name = name;
+      if (password) targetUser.passwordHash = await bcrypt.hash(password, 10);
+    }
+
+    await targetUser.save();
+
+    await Log.create({ username: currentUser.name, ip, status: true, message: `Usuario actualizado: ${targetUser.name}` });
+
+    res.json({ status: true });
+  } catch (err) {
+    console.error(err);
+    await Log.create({ username: req.userId, ip, status: false, message: `Error actualizando usuario: ${err.message}` });
+    res.status(500).json({ status: false, message: "Error al actualizar usuario" });
+  }
 };
 
-// ==========================
-// Eliminar usuario (admin o sobre sí mismo)
-// ==========================
 export const deleteUser = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const currentUser = await User.findByPk(req.userId);
-        const targetUser = await User.findByPk(id);
+  const ip = req.ip;
+  try {
+    const { id } = req.params;
+    const currentUser = await User.findByPk(req.userId);
+    const targetUser = await User.findByPk(id);
 
-        if (!targetUser) return res.status(404).json({ message: "Usuario no encontrado" });
-
-        // Validación de permisos
-        if (currentUser.role !== "admin" && currentUser.id !== targetUser.id) {
-            return res.status(403).json({ message: "No autorizado" });
-        }
-
-        await targetUser.destroy();
-        res.json({ message: "Usuario eliminado correctamente" });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: "Error al eliminar usuario" });
+    if (!targetUser) {
+      await Log.create({ username: currentUser?.name || null, ip, status: false, message: `Intento de eliminar usuario no existente: ${id}` });
+      return res.status(404).json({ message: "Usuario no encontrado" });
     }
+
+    if (currentUser.role !== "admin" && currentUser.id !== targetUser.id) {
+      await Log.create({ username: currentUser.name, ip, status: false, message: `Intento de eliminar otro usuario sin permisos: ${id}` });
+      return res.status(403).json({ message: "No autorizado" });
+    }
+
+    await targetUser.destroy();
+
+    await Log.create({ username: currentUser.name, ip, status: true, message: `Usuario eliminado: ${targetUser.name}` });
+
+    res.json({ status: true });
+  } catch (err) {
+    console.error(err);
+    await Log.create({ username: req.userId, ip, status: false, message: `Error eliminando usuario: ${err.message}` });
+    res.status(500).json({ status: false, message: "Error al eliminar usuario" });
+  }
 };

@@ -18,7 +18,7 @@ const User = sequelize.define(
         fields: ["name"],
       },
     ],
-  }
+  },
 );
 
 export default User;

@@ -2,35 +2,29 @@ import express from "express";
 import cors from "cors";
 import morgan from "morgan";
 
-import { sequelize } from "./models/index.js";
 import { PORT } from "./config/env.js";
 
+import sequelize from "./config/db.js";
 import userRoutes from "./routes/users.js";
+import logsRoutes from "./routes/logs.js";
 
 const app = express();
 
-app.use(
-  cors({
-    origin: true,
-    credentials: true,
-  })
-);
-
-// Middleware
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use(morgan("dev"));
 
 // Rutas
 app.use("/api/users", userRoutes);
+app.use("/api/logs", logsRoutes);
 
-// Inicialización de Sequelize + servidor
 (async () => {
   try {
     await sequelize.sync({ alter: true });
-    console.log("Database synchronized (development)");
+    console.log("Database synchronized (SQLite)");
 
     app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT} [development]`);
+      console.log(`Server running on port ${PORT}`);
     });
   } catch (err) {
     console.error("DB sync error:", err);
@@ -38,7 +32,6 @@ app.use("/api/users", userRoutes);
   }
 })();
 
-// Manejo global de errores
 app.use((err, req, res, next) => {
   console.error(err);
   res.status(500).json({ message: err.message });
