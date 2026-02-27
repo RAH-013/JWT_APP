@@ -1,8 +1,11 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { JWT_SECRET } from "../config/env.js";
+
+import { mexicoTime } from "../utils/time.js"
+
 import User from "../model/user.js";
 import Log from "../model/logs.js";
-import { JWT_SECRET } from "../config/env.js";
 
 export const authUser = async (req, res) => {
   const { name, password } = req.body;
@@ -18,6 +21,8 @@ export const authUser = async (req, res) => {
         ip,
         status: false,
         message: "Usuario no encontrado",
+        createdAt: mexicoTime(),
+        updatedAt: mexicoTime()
       });
       return res.status(401).json({ message: "Usuario o contraseña incorrectos" });
     }
@@ -30,6 +35,8 @@ export const authUser = async (req, res) => {
         ip,
         status: false,
         message: "Contraseña incorrecta",
+        createdAt: mexicoTime(),
+        updatedAt: mexicoTime()
       });
       return res.status(401).json({ message: "Usuario o contraseña incorrectos" });
     }
@@ -42,6 +49,8 @@ export const authUser = async (req, res) => {
       ip,
       status: true,
       message: "Login exitoso",
+      createdAt: mexicoTime(),
+      updatedAt: mexicoTime()
     });
 
     res.json({ token });
@@ -52,6 +61,8 @@ export const authUser = async (req, res) => {
       ip,
       status: false,
       message: `Error autenticando usuario: ${err.message}`,
+      createdAt: mexicoTime(),
+      updatedAt: mexicoTime()
     });
     res.status(500).json({ message: "Error al autenticar usuario" });
   }
@@ -70,6 +81,8 @@ export const getUsers = async (req, res) => {
         ip,
         status: false,
         message: "Intento de obtener usuarios sin permisos",
+        createdAt: mexicoTime(),
+        updatedAt: mexicoTime()
       });
       return res.status(403).json({ message: "No autorizado" });
     }
@@ -97,6 +110,8 @@ export const getUsers = async (req, res) => {
       ip,
       status: false,
       message: `Error al obtener usuarios: ${err.message}`,
+      createdAt: mexicoTime(),
+      updatedAt: mexicoTime()
     });
     res.status(500).json({ status: false, message: "Error al obtener usuarios" });
   }
@@ -117,6 +132,8 @@ export const getUserData = async (req, res) => {
         ip,
         status: false,
         message: "Usuario no encontrado al obtener datos",
+        createdAt: mexicoTime(),
+        updatedAt: mexicoTime()
       });
       return res.status(404).json({ message: "Usuario no encontrado" });
     }
@@ -127,6 +144,8 @@ export const getUserData = async (req, res) => {
       ip,
       status: true,
       message: "Consulta de datos de usuario",
+      createdAt: mexicoTime(),
+      updatedAt: mexicoTime()
     });
 
     res.json(currentUser);
@@ -137,6 +156,8 @@ export const getUserData = async (req, res) => {
       ip,
       status: false,
       message: `Error al obtener usuario: ${err.message}`,
+      createdAt: mexicoTime(),
+      updatedAt: mexicoTime()
     });
     res.status(500).json({ message: "Error al obtener usuario" });
   }
@@ -154,6 +175,8 @@ export const addUser = async (req, res) => {
         ip,
         status: false,
         message: "Intento de crear usuario sin permisos",
+        createdAt: mexicoTime(),
+        updatedAt: mexicoTime()
       });
       return res.status(403).json({ message: "No autorizado" });
     }
@@ -169,6 +192,8 @@ export const addUser = async (req, res) => {
       ip,
       status: true,
       message: `Usuario creado: ${newUser.name}`,
+      createdAt: mexicoTime(),
+      updatedAt: mexicoTime()
     });
 
     res.status(201).json({ status: true });
@@ -179,6 +204,8 @@ export const addUser = async (req, res) => {
       ip,
       status: false,
       message: `Error creando usuario: ${err.message}`,
+      createdAt: mexicoTime(),
+      updatedAt: mexicoTime()
     });
     res.status(500).json({ status: false, message: "Error al crear usuario" });
   }
@@ -201,6 +228,8 @@ export const updateUser = async (req, res) => {
         ip,
         status: false,
         message: `Intento de actualizar usuario no existente: ${id}`,
+        createdAt: mexicoTime(),
+        updatedAt: mexicoTime()
       });
       return res.status(404).json({ message: "Usuario no encontrado" });
     }
@@ -217,6 +246,8 @@ export const updateUser = async (req, res) => {
           ip,
           status: false,
           message: `Intento de actualizar otro usuario sin permisos: ${id}`,
+          createdAt: mexicoTime(),
+          updatedAt: mexicoTime()
         });
         return res.status(403).json({ message: "No autorizado" });
       }
@@ -232,6 +263,8 @@ export const updateUser = async (req, res) => {
       ip,
       status: true,
       message: `Usuario actualizado: ${targetUser.name}`,
+      createdAt: mexicoTime(),
+      updatedAt: mexicoTime()
     });
 
     res.json({ status: true });
@@ -242,6 +275,8 @@ export const updateUser = async (req, res) => {
       ip,
       status: false,
       message: `Error actualizando usuario: ${err.message}`,
+      createdAt: mexicoTime(),
+      updatedAt: mexicoTime()
     });
     res.status(500).json({ status: false, message: "Error al actualizar usuario" });
   }
@@ -263,6 +298,8 @@ export const deleteUser = async (req, res) => {
         ip,
         status: false,
         message: `Intento de eliminar usuario no existente: ${id}`,
+        createdAt: mexicoTime(),
+        updatedAt: mexicoTime()
       });
       return res.status(404).json({ message: "Usuario no encontrado" });
     }
@@ -274,6 +311,8 @@ export const deleteUser = async (req, res) => {
         ip,
         status: false,
         message: `Intento de eliminar otro usuario sin permisos: ${id}`,
+        createdAt: mexicoTime(),
+        updatedAt: mexicoTime()
       });
       return res.status(403).json({ message: "No autorizado" });
     }
@@ -286,6 +325,8 @@ export const deleteUser = async (req, res) => {
       ip,
       status: true,
       message: `Usuario eliminado: ${targetUser.name}`,
+      createdAt: mexicoTime(),
+      updatedAt: mexicoTime()
     });
 
     res.json({ status: true });
@@ -296,6 +337,8 @@ export const deleteUser = async (req, res) => {
       ip,
       status: false,
       message: `Error eliminando usuario: ${err.message}`,
+      createdAt: mexicoTime(),
+      updatedAt: mexicoTime()
     });
     res.status(500).json({ status: false, message: "Error al eliminar usuario" });
   }

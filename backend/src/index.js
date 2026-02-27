@@ -5,6 +5,8 @@ import morgan from "morgan";
 import { PORT } from "./config/env.js";
 
 import sequelize from "./config/db.js";
+import bcrypt from "bcryptjs";
+import User from "./model/user.js"
 import userRoutes from "./routes/users.js";
 import logsRoutes from "./routes/logs.js";
 
@@ -23,13 +25,12 @@ app.use("/api/logs", logsRoutes);
     await sequelize.sync({ alter: true });
     console.log("Database synchronized (SQLite)");
 
-    const { User } = sequelize.models;
-    const adminExists = await User.findOne({ where: { username: "admin" } });
+    const adminExists = await User.findOne({ where: { name: "admin" } });
 
     if (!adminExists) {
       const hashedPassword = await bcrypt.hash("admin", 10);
       await User.create({
-        username: "admin",
+        name: "admin",
         passwordHash: hashedPassword,
         role: "admin",
       });
