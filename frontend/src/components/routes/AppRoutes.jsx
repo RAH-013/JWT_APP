@@ -9,6 +9,7 @@ import Loader from "../layouts/Loader";
 import PrivateRoute from "./PrivateRoute";
 
 const Auth = lazy(() => import("../pages/Auth"));
+const Register = lazy(() => import("../pages/Register"));
 const Home = lazy(() => import("../pages/Home"));
 const Logs = lazy(() => import("../pages/Logs"));
 const NotFound = lazy(() => import("../pages/NotFound"));
@@ -21,6 +22,7 @@ function AppContent() {
   return (
     <Routes>
       <Route path="/authenticate" element={<Auth />} />
+      <Route path="/register" element={<Register />} />
 
       <Route
         element={
