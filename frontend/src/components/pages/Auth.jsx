@@ -68,12 +68,6 @@ export default function Auth() {
           required
         />
         <button type="submit">Iniciar Sesión</button>
-        <p style={{ marginTop: "10px", textAlign: "center", cursor: "pointer", color: "#007bff" }}>
-          ¿No tienes cuenta?
-          <span onClick={() => navigate("/register")} style={{ textDecoration: "underline", marginLeft: "5px" }}>
-            Regístrate aquí
-          </span>
-        </p>
       </form>
     </div>
   );
