@@ -1,0 +1,223 @@
+openapi: 3.0.3
+
+info:
+  title: Users API
+  version: 1.0.0
+  description: API REST para la administración de usuarios.
+
+servers:
+  - url: /
+
+tags:
+  - name: Authentication
+    description: Autenticación de usuarios
+  - name: Users
+    description: Administración de usuarios
+
+paths:
+  /api/users:
+    get:
+      tags:
+        - Users
+      summary: Obtener todos los usuarios
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Usuarios obtenidos correctamente
+        "401":
+          description: No autenticado
+        "403":
+          description: Acceso denegado
+
+    post:
+      tags:
+        - Users
+      summary: Crear un usuario
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUser"
+      responses:
+        "201":
+          description: Usuario creado correctamente
+        "400":
+          description: Solicitud inválida
+        "401":
+          description: No autenticado
+        "403":
+          description: Acceso denegado
+        "409":
+          description: Usuario duplicado
+        "422":
+          description: Datos inválidos
+
+  /api/users/login:
+    post:
+      tags:
+        - Authentication
+      summary: Iniciar sesión
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginUser"
+      responses:
+        "200":
+          description: Autenticación exitosa
+        "401":
+          description: Credenciales incorrectas
+
+  /api/users/me:
+    get:
+      tags:
+        - Users
+      summary: Obtener el usuario autenticado
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Usuario obtenido correctamente
+        "401":
+          description: No autenticado
+
+  /api/users/{id}:
+    get:
+      tags:
+        - Users
+      summary: Obtener un usuario por ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Usuario encontrado
+        "401":
+          description: No autenticado
+        "403":
+          description: Acceso denegado
+        "404":
+          description: Usuario no encontrado
+
+    put:
+      tags:
+        - Users
+      summary: Actualizar un usuario
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUser"
+      responses:
+        "200":
+          description: Usuario actualizado
+        "400":
+          description: Solicitud inválida
+        "401":
+          description: No autenticado
+        "403":
+          description: Acceso denegado
+        "404":
+          description: Usuario no encontrado
+        "422":
+          description: Datos inválidos
+
+    delete:
+      tags:
+        - Users
+      summary: Eliminar un usuario
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Usuario eliminado
+        "401":
+          description: No autenticado
+        "403":
+          description: Acceso denegado
+        "404":
+          description: Usuario no encontrado
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    CreateUser:
+      type: object
+      required:
+        - name
+        - password
+      properties:
+        name:
+          type: string
+          example: Jose
+        password:
+          type: string
+          format: password
+          example: jose123
+        role:
+          type: string
+          enum:
+            - user
+            - manager
+            - admin
+          default: user
+
+    UpdateUser:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Jose Actualizado
+        password:
+          type: string
+          format: password
+        role:
+          type: string
+          enum:
+            - user
+            - manager
+            - admin
+
+    LoginUser:
+      type: object
+      required:
+        - name
+        - password
+      properties:
+        name:
+          type: string
+          example: admin
+        password:
+          type: string
+          format: password
+          example: admin

@@ -1,2 +1,5 @@
 .env
 data/
+*.py
+*.json
+*.txt

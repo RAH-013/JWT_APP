@@ -2,344 +2,467 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { JWT_SECRET } from "../config/env.js";
 
-import { mexicoTime } from "../utils/time.js"
+import { mexicoTime } from "../utils/time.js";
 
 import User from "../model/user.js";
 import Log from "../model/logs.js";
 
+const ROLES = ["user", "manager", "admin"];
+
+const usuarioPublico = (user) => ({
+  id: user.id,
+  name: user.name,
+  password: user.password,
+  role: user.role,
+  createdAt: user.createdAt,
+  updatedAt: user.updatedAt,
+});
+
+const registrarLog = async ({
+  userId = null,
+  username = null,
+  ip = null,
+  status,
+  message,
+}) => {
+  try {
+    const now = mexicoTime();
+
+    await Log.create({
+      userId,
+      username,
+      ip,
+      status,
+      message,
+      createdAt: now,
+      updatedAt: now,
+    });
+  } catch (error) {
+    console.error("Error al registrar actividad:", error);
+  }
+};
+
+const responderError = (res, error, mensaje) => {
+  if (error.name === "SequelizeUniqueConstraintError") {
+    return res.status(409).json({
+      error: "Conflicto",
+      detalles: "El nombre de usuario ya está registrado.",
+    });
+  }
+
+  if (error.name === "SequelizeValidationError") {
+    return res.status(422).json({
+      error: "Datos inválidos",
+      detalles: error.errors.map((item) => item.message),
+    });
+  }
+
+  if (error.name === "SequelizeForeignKeyConstraintError") {
+    return res.status(409).json({
+      error: "Conflicto",
+      detalles: "El registro está relacionado con otros datos.",
+    });
+  }
+
+  console.error(error);
+
+  return res.status(500).json({
+    error: "Error interno del servidor",
+    detalles: mensaje,
+  });
+};
+
+const obtenerUsuarioAutenticado = async (req) => {
+  if (!req.userId) return null;
+  return User.findByPk(req.userId);
+};
+
+const esAdministrador = (user) => user?.role === "admin";
+
 export const authUser = async (req, res) => {
-  const { name, password } = req.body;
+  const { name, password } = req.body ?? {};
   const ip = req.ip;
 
   try {
-    const user = await User.findOne({ where: { name } });
-
-    if (!user) {
-      await Log.create({
-        userId: null,
-        username: name ?? null,
-        ip,
-        status: false,
-        message: "Usuario no encontrado",
-        createdAt: mexicoTime(),
-        updatedAt: mexicoTime()
+    if (
+      typeof name !== "string" ||
+      !name.trim() ||
+      typeof password !== "string" ||
+      !password
+    ) {
+      return res.status(400).json({
+        error: "Datos inválidos",
+        detalles: "Nombre y contraseña son obligatorios.",
       });
-      return res.status(401).json({ message: "Usuario o contraseña incorrectos" });
     }
 
-    const validPassword = await bcrypt.compare(password, user.passwordHash);
-    if (!validPassword) {
-      await Log.create({
-        userId: user.id,
-        username: user.name,
+    const user = await User.findOne({
+      where: { name: name.trim() },
+    });
+
+    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+      await registrarLog({
+        userId: user?.id ?? null,
+        username: name.trim(),
         ip,
         status: false,
-        message: "Contraseña incorrecta",
-        createdAt: mexicoTime(),
-        updatedAt: mexicoTime()
+        message: "Intento de inicio de sesión fallido",
       });
-      return res.status(401).json({ message: "Usuario o contraseña incorrectos" });
+
+      return res.status(401).json({
+        error: "No autorizado",
+        detalles: "Usuario o contraseña incorrectos.",
+      });
     }
 
-    const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: "1h" });
+    const access_token = jwt.sign({ id: user.id }, JWT_SECRET, {
+      expiresIn: "1h",
+    });
 
-    await Log.create({
+    await registrarLog({
       userId: user.id,
       username: user.name,
       ip,
       status: true,
-      message: "Login exitoso",
-      createdAt: mexicoTime(),
-      updatedAt: mexicoTime()
+      message: "Inicio de sesión exitoso",
     });
 
-    res.json({ token });
-  } catch (err) {
-    await Log.create({
-      userId: null,
-      username: name ?? null,
+    return res.status(200).json({
+      access_token,
+      user: {
+        id: user.id,
+        name: user.name,
+        role: user.role,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      },
+    });
+  } catch (error) {
+    await registrarLog({
+      username: typeof name === "string" ? name : null,
       ip,
       status: false,
-      message: `Error autenticando usuario: ${err.message}`,
-      createdAt: mexicoTime(),
-      updatedAt: mexicoTime()
+      message: `Error de autenticación: ${error.message}`,
     });
-    res.status(500).json({ message: "Error al autenticar usuario" });
+
+    return responderError(res, error, "No fue posible autenticar al usuario.");
   }
 };
 
 export const getUsers = async (req, res) => {
-  const ip = req.ip;
-
   try {
-    const currentUser = await User.findByPk(req.userId);
+    const currentUser = await obtenerUsuarioAutenticado(req);
 
-    if (!currentUser || !["admin", "manager", "user"].includes(currentUser.role)) {
-      await Log.create({
-        userId: currentUser?.id ?? null,
-        username: currentUser?.name ?? null,
-        ip,
+    if (!currentUser) {
+      return res.status(401).json({
+        error: "No autorizado",
+        detalles: "La sesión no es válida.",
+      });
+    }
+
+    if (!esAdministrador(currentUser)) {
+      await registrarLog({
+        userId: currentUser.id,
+        username: currentUser.name,
+        ip: req.ip,
         status: false,
-        message: "Intento de obtener usuarios sin permisos",
-        createdAt: mexicoTime(),
-        updatedAt: mexicoTime()
+        message: "Consulta de usuarios sin permisos",
       });
-      return res.status(403).json({ message: "No autorizado" });
+
+      return res.status(403).json({
+        error: "Acceso denegado",
+        detalles: "Se requieren permisos de administrador.",
+      });
     }
 
-    let users;
-
-    if (currentUser.role === "admin" || currentUser.role === "manager") {
-      users = await User.findAll({
-        attributes: { exclude: ["passwordHash"] },
-      });
-      users = users.filter(user => user.id !== currentUser.id);
-    } else {
-      users = [{
-        id: "Oculto",
-        name: currentUser.name,
-        role: currentUser.role
-      }];
-    }
-
-    res.json({ status: true, users });
-  } catch (err) {
-    await Log.create({
-      userId: req.userId ?? null,
-      username: null,
-      ip,
-      status: false,
-      message: `Error al obtener usuarios: ${err.message}`,
-      createdAt: mexicoTime(),
-      updatedAt: mexicoTime()
+    const users = await User.findAll({
+      order: [["createdAt", "DESC"]],
     });
-    res.status(500).json({ status: false, message: "Error al obtener usuarios" });
+
+    await registrarLog({
+      userId: currentUser.id,
+      username: currentUser.name,
+      ip: req.ip,
+      status: true,
+      message: "Consulta de usuarios",
+    });
+
+    return res.status(200).json({
+      status: true,
+      users: users.map(usuarioPublico),
+    });
+  } catch (error) {
+    return responderError(res, error, "No fue posible obtener los usuarios.");
   }
 };
 
 export const getUserData = async (req, res) => {
-  const ip = req.ip;
-
   try {
-    const currentUser = await User.findByPk(req.userId, {
-      attributes: { exclude: ["passwordHash"] },
-    });
+    const currentUser = await obtenerUsuarioAutenticado(req);
 
     if (!currentUser) {
-      await Log.create({
-        userId: null,
-        username: null,
-        ip,
-        status: false,
-        message: "Usuario no encontrado al obtener datos",
-        createdAt: mexicoTime(),
-        updatedAt: mexicoTime()
+      return res.status(401).json({
+        error: "No autorizado",
+        detalles: "La sesión no es válida.",
       });
-      return res.status(404).json({ message: "Usuario no encontrado" });
     }
 
-    await Log.create({
+    const userId = req.params.id || currentUser.id;
+    const user = await User.findByPk(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        error: "No encontrado",
+        detalles: "El usuario solicitado no existe.",
+      });
+    }
+
+    const esPropietario =
+      String(user.id) === String(currentUser.id) ||
+      String(user.ownerId) === String(currentUser.id);
+
+    if (!esPropietario && !esAdministrador(currentUser)) {
+      await registrarLog({
+        userId: currentUser.id,
+        username: currentUser.name,
+        ip: req.ip,
+        status: false,
+        message: `Consulta no autorizada del usuario ${userId}`,
+      });
+
+      return res.status(403).json({
+        error: "Acceso denegado",
+        detalles: "No puedes consultar un registro que no te pertenece.",
+      });
+    }
+
+    await registrarLog({
       userId: currentUser.id,
       username: currentUser.name,
-      ip,
+      ip: req.ip,
       status: true,
-      message: "Consulta de datos de usuario",
-      createdAt: mexicoTime(),
-      updatedAt: mexicoTime()
+      message: `Consulta de usuario ${user.name}`,
     });
 
-    res.json(currentUser);
-  } catch (err) {
-    await Log.create({
-      userId: null,
-      username: null,
-      ip,
-      status: false,
-      message: `Error al obtener usuario: ${err.message}`,
-      createdAt: mexicoTime(),
-      updatedAt: mexicoTime()
-    });
-    res.status(500).json({ message: "Error al obtener usuario" });
+    return res.status(200).json(usuarioPublico(user));
+  } catch (error) {
+    return responderError(res, error, "No fue posible obtener el usuario.");
   }
 };
 
 export const addUser = async (req, res) => {
-  const ip = req.ip;
-
   try {
-    const currentUser = await User.findByPk(req.userId);
-    if (!currentUser || currentUser.role !== "admin") {
-      await Log.create({
-        userId: currentUser?.id ?? null,
-        username: currentUser?.name ?? null,
-        ip,
-        status: false,
-        message: "Intento de crear usuario sin permisos",
-        createdAt: mexicoTime(),
-        updatedAt: mexicoTime()
+    const currentUser = await obtenerUsuarioAutenticado(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        error: "No autorizado",
+        detalles: "La sesión no es válida.",
       });
-      return res.status(403).json({ message: "No autorizado" });
     }
 
-    const { name, password, role } = req.body;
-    const passwordHash = await bcrypt.hash(password, 10);
+    const { name, password, role = "user" } = req.body ?? {};
 
-    const newUser = await User.create({ name, passwordHash, role });
+    if (
+      typeof name !== "string" ||
+      !name.trim() ||
+      typeof password !== "string" ||
+      !password
+    ) {
+      return res.status(422).json({
+        error: "Datos inválidos",
+        detalles: "Nombre y contraseña son obligatorios.",
+      });
+    }
 
-    await Log.create({
+    if (!ROLES.includes(role)) {
+      return res.status(422).json({
+        error: "Datos inválidos",
+        detalles: "El rol proporcionado no es válido.",
+      });
+    }
+
+    const administrador = esAdministrador(currentUser);
+
+    if (!administrador && role !== "user") {
+      return res.status(403).json({
+        error: "Acceso denegado",
+        detalles: "No puedes asignar roles privilegiados.",
+      });
+    }
+
+    const user = await User.create({
+      name: name.trim(),
+      password,
+      passwordHash: await bcrypt.hash(password, 10),
+      role: administrador ? role : "user",
+      ownerId: administrador ? null : currentUser.id,
+    });
+
+    await registrarLog({
       userId: currentUser.id,
       username: currentUser.name,
-      ip,
+      ip: req.ip,
       status: true,
-      message: `Usuario creado: ${newUser.name}`,
-      createdAt: mexicoTime(),
-      updatedAt: mexicoTime()
+      message: `Usuario creado: ${user.name}`,
     });
 
-    res.status(201).json({ status: true });
-  } catch (err) {
-    await Log.create({
-      userId: null,
-      username: null,
-      ip,
-      status: false,
-      message: `Error creando usuario: ${err.message}`,
-      createdAt: mexicoTime(),
-      updatedAt: mexicoTime()
-    });
-    res.status(500).json({ status: false, message: "Error al crear usuario" });
+    return res.status(201).json(usuarioPublico(user));
+  } catch (error) {
+    return responderError(res, error, "No fue posible crear el usuario.");
   }
 };
 
 export const updateUser = async (req, res) => {
-  const ip = req.ip;
-
   try {
-    const { id } = req.params;
-    const { name, password, role } = req.body;
+    const currentUser = await obtenerUsuarioAutenticado(req);
 
-    const currentUser = await User.findByPk(req.userId);
-    const targetUser = await User.findByPk(id);
-
-    if (!targetUser) {
-      await Log.create({
-        userId: currentUser?.id ?? null,
-        username: currentUser?.name ?? null,
-        ip,
-        status: false,
-        message: `Intento de actualizar usuario no existente: ${id}`,
-        createdAt: mexicoTime(),
-        updatedAt: mexicoTime()
+    if (!currentUser) {
+      return res.status(401).json({
+        error: "No autorizado",
+        detalles: "La sesión no es válida.",
       });
-      return res.status(404).json({ message: "Usuario no encontrado" });
     }
 
-    if (currentUser.role === "admin") {
-      if (name) targetUser.name = name;
-      if (password) targetUser.passwordHash = await bcrypt.hash(password, 10);
-      if (role) targetUser.role = role;
-    } else {
-      if (currentUser.id !== targetUser.id) {
-        await Log.create({
-          userId: currentUser.id,
-          username: currentUser.name,
-          ip,
-          status: false,
-          message: `Intento de actualizar otro usuario sin permisos: ${id}`,
-          createdAt: mexicoTime(),
-          updatedAt: mexicoTime()
+    if (!esAdministrador(currentUser)) {
+      return res.status(403).json({
+        error: "Acceso denegado",
+        detalles: "Se requieren permisos de administrador.",
+      });
+    }
+
+    const user = await User.findByPk(req.params.id);
+
+    if (!user) {
+      return res.status(404).json({
+        error: "No encontrado",
+        detalles: "El usuario solicitado no existe.",
+      });
+    }
+
+    const { name, password, role } = req.body ?? {};
+
+    if (name === undefined && password === undefined && role === undefined) {
+      return res.status(400).json({
+        error: "Solicitud inválida",
+        detalles: "Debes proporcionar al menos un campo para actualizar.",
+      });
+    }
+
+    const changes = {};
+
+    if (name !== undefined) {
+      if (typeof name !== "string" || !name.trim()) {
+        return res.status(422).json({
+          error: "Datos inválidos",
+          detalles: "El nombre no puede estar vacío.",
         });
-        return res.status(403).json({ message: "No autorizado" });
       }
-      if (name) targetUser.name = name;
-      if (password) targetUser.passwordHash = await bcrypt.hash(password, 10);
+
+      const normalizedName = name.trim();
+
+      if (normalizedName !== user.name) {
+        changes.name = normalizedName;
+      }
     }
 
-    await targetUser.save();
+    if (password !== undefined) {
+      if (typeof password !== "string" || !password) {
+        return res.status(422).json({
+          error: "Datos inválidos",
+          detalles: "La contraseña no es válida.",
+        });
+      }
 
-    await Log.create({
+      if (password !== user.password) {
+        changes.password = password;
+        changes.passwordHash = await bcrypt.hash(password, 10);
+      }
+    }
+
+    if (role !== undefined) {
+      if (!ROLES.includes(role)) {
+        return res.status(422).json({
+          error: "Datos inválidos",
+          detalles: "El rol proporcionado no es válido.",
+        });
+      }
+
+      if (role !== user.role) {
+        changes.role = role;
+      }
+    }
+
+    if (Object.keys(changes).length > 0) {
+      await user.update(changes);
+    }
+
+    await registrarLog({
       userId: currentUser.id,
       username: currentUser.name,
-      ip,
+      ip: req.ip,
       status: true,
-      message: `Usuario actualizado: ${targetUser.name}`,
-      createdAt: mexicoTime(),
-      updatedAt: mexicoTime()
+      message: `Usuario actualizado: ${user.name}`,
     });
 
-    res.json({ status: true });
-  } catch (err) {
-    await Log.create({
-      userId: req.userId ?? null,
-      username: null,
-      ip,
-      status: false,
-      message: `Error actualizando usuario: ${err.message}`,
-      createdAt: mexicoTime(),
-      updatedAt: mexicoTime()
-    });
-    res.status(500).json({ status: false, message: "Error al actualizar usuario" });
+    return res.status(200).json(usuarioPublico(user));
+  } catch (error) {
+    return responderError(res, error, "No fue posible actualizar el usuario.");
   }
 };
 
 export const deleteUser = async (req, res) => {
-  const ip = req.ip;
-
   try {
-    const { id } = req.params;
+    const currentUser = await obtenerUsuarioAutenticado(req);
 
-    const currentUser = await User.findByPk(req.userId);
-    const targetUser = await User.findByPk(id);
-
-    if (!targetUser) {
-      await Log.create({
-        userId: currentUser?.id ?? null,
-        username: currentUser?.name ?? null,
-        ip,
-        status: false,
-        message: `Intento de eliminar usuario no existente: ${id}`,
-        createdAt: mexicoTime(),
-        updatedAt: mexicoTime()
+    if (!currentUser) {
+      return res.status(401).json({
+        error: "No autorizado",
+        detalles: "La sesión no es válida.",
       });
-      return res.status(404).json({ message: "Usuario no encontrado" });
     }
 
-    if (currentUser.role !== "admin" && currentUser.id !== targetUser.id) {
-      await Log.create({
+    const user = await User.findByPk(req.params.id);
+
+    if (!user) {
+      return res.status(404).json({
+        error: "No encontrado",
+        detalles: "El usuario solicitado no existe.",
+      });
+    }
+
+    const esDueno = String(user.ownerId) === String(currentUser.id);
+
+    if (!esAdministrador(currentUser) && !esDueno) {
+      await registrarLog({
         userId: currentUser.id,
         username: currentUser.name,
-        ip,
+        ip: req.ip,
         status: false,
-        message: `Intento de eliminar otro usuario sin permisos: ${id}`,
-        createdAt: mexicoTime(),
-        updatedAt: mexicoTime()
+        message: `Eliminación no autorizada del usuario ${user.name}`,
       });
-      return res.status(403).json({ message: "No autorizado" });
+
+      return res.status(403).json({
+        error: "Acceso denegado",
+        detalles: "Se requieren permisos de administrador o ser el propietario del registro.",
+      });
     }
 
-    await targetUser.destroy();
+    await user.destroy();
 
-    await Log.create({
+    await registrarLog({
       userId: currentUser.id,
       username: currentUser.name,
-      ip,
+      ip: req.ip,
       status: true,
-      message: `Usuario eliminado: ${targetUser.name}`,
-      createdAt: mexicoTime(),
-      updatedAt: mexicoTime()
+      message: `Usuario eliminado: ${user.name}`,
     });
 
-    res.json({ status: true });
-  } catch (err) {
-    await Log.create({
-      userId: req.userId ?? null,
-      username: null,
-      ip,
-      status: false,
-      message: `Error eliminando usuario: ${err.message}`,
-      createdAt: mexicoTime(),
-      updatedAt: mexicoTime()
+    return res.status(200).json({
+      message: "Usuario eliminado correctamente",
+      id: user.id,
     });
-    res.status(500).json({ status: false, message: "Error al eliminar usuario" });
+  } catch (error) {
+    return responderError(res, error, "No fue posible eliminar el usuario.");
   }
 };

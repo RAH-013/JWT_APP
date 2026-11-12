@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
+
 import { useUser } from "../context/UserContext";
 import { apiAuth } from "../../api/auth";
 
@@ -20,8 +21,7 @@ export default function Auth() {
     e.preventDefault();
 
     try {
-      const { token } = await apiAuth({ name, password });
-      sessionStorage.setItem("jwt_project", token);
+      await apiAuth({ name, password });
 
       MySwal.fire({
         toast: true,
@@ -37,6 +37,7 @@ export default function Auth() {
       navigate("/", { replace: true });
     } catch (err) {
       console.error("Error en autenticación:", err);
+
       MySwal.fire({
         toast: true,
         position: "bottom",
@@ -53,6 +54,7 @@ export default function Auth() {
     <div className="authContainer">
       <form onSubmit={handleSubmit}>
         <h1>Ingresa tus credenciales</h1>
+
         <input
           type="text"
           placeholder="Usuario"
@@ -60,6 +62,7 @@ export default function Auth() {
           onChange={(e) => setName(e.target.value)}
           required
         />
+
         <input
           type="password"
           placeholder="Contraseña"
@@ -67,6 +70,7 @@ export default function Auth() {
           onChange={(e) => setPassword(e.target.value)}
           required
         />
+
         <button type="submit">Iniciar Sesión</button>
       </form>
     </div>
