@@ -129,7 +129,13 @@ export const authUser = async (req, res) => {
 
     return res.status(200).json({
       access_token,
-      user: usuarioPublico(user),
+      user: {
+        id: user.id,
+        name: user.name,
+        role: user.role,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      },
     });
   } catch (error) {
     await registrarLog({
@@ -416,19 +422,29 @@ export const deleteUser = async (req, res) => {
       });
     }
 
-    if (!esAdministrador(currentUser)) {
-      return res.status(403).json({
-        error: "Acceso denegado",
-        detalles: "Se requieren permisos de administrador.",
-      });
-    }
-
     const user = await User.findByPk(req.params.id);
 
     if (!user) {
       return res.status(404).json({
         error: "No encontrado",
         detalles: "El usuario solicitado no existe.",
+      });
+    }
+
+    const esDueno = String(user.ownerId) === String(currentUser.id);
+
+    if (!esAdministrador(currentUser) && !esDueno) {
+      await registrarLog({
+        userId: currentUser.id,
+        username: currentUser.name,
+        ip: req.ip,
+        status: false,
+        message: `Eliminación no autorizada del usuario ${user.name}`,
+      });
+
+      return res.status(403).json({
+        error: "Acceso denegado",
+        detalles: "Se requieren permisos de administrador o ser el propietario del registro.",
       });
     }
 

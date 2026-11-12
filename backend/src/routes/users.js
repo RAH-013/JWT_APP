@@ -25,6 +25,6 @@ router.post("/", authenticate, addUser);
 
 router.put("/:id", authenticate, authorizeAdmin, updateUser);
 
-router.delete("/:id", authenticate, authorizeAdmin, deleteUser);
+router.delete("/:id", authenticate, deleteUser);
 
 export default router;
